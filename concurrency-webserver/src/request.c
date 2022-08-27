@@ -178,3 +178,36 @@ void request_handle(int fd) {
 	request_serve_dynamic(fd, filename, cgiargs);
     }
 }
+void request_handle_SFF(int fd, char *method, char* uri, char* version) {
+    int is_static;
+    struct stat sbuf;
+    char filename[MAXBUF], cgiargs[MAXBUF];
+
+    printf("method:%s uri:%s version:%s\n", method, uri, version);
+    
+    if (strcasecmp(method, "GET")) {
+	request_error(fd, method, "501", "Not Implemented", "server does not implement this method");
+	return;
+    }
+    request_read_headers(fd);
+    
+    is_static = request_parse_uri(uri, filename, cgiargs);
+    if (stat(filename, &sbuf) < 0) {
+	request_error(fd, filename, "404", "Not found", "server could not find this file");
+	return;
+    }
+    
+    if (is_static) {
+	if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
+	    request_error(fd, filename, "403", "Forbidden", "server could not read this file");
+	    return;
+	}
+	request_serve_static(fd, filename, sbuf.st_size);
+    } else {
+	if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) {
+	    request_error(fd, filename, "403", "Forbidden", "server could not run this CGI program");
+	    return;
+	}
+	request_serve_dynamic(fd, filename, cgiargs);
+    }
+}
